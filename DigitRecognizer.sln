@@ -1,0 +1,41 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.31101.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{E82BB040-2AC0-41DC-BF62-1D4620D4D501}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "data", "data", "{332680E0-AFD0-40E9-997A-A0D6DEFDACC0}"
+	ProjectSection(SolutionItems) = preProject
+		data\test.csv = data\test.csv
+		data\train.csv = data\train.csv
+	EndProjectSection
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "DigitRecognizer", "src\DigitRecognizer\DigitRecognizer.fsproj", "{B03DE53E-1EFB-407D-8F0A-5FFA454364E8}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "paket", "paket", "{AA76A2F6-1221-465A-9586-9C56C0B105FD}"
+	ProjectSection(SolutionItems) = preProject
+		.paket\paket.bootstrapper.exe = .paket\paket.bootstrapper.exe
+		paket.dependencies = paket.dependencies
+		paket.lock = paket.lock
+		.paket\paket.targets = .paket\paket.targets
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B03DE53E-1EFB-407D-8F0A-5FFA454364E8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B03DE53E-1EFB-407D-8F0A-5FFA454364E8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B03DE53E-1EFB-407D-8F0A-5FFA454364E8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B03DE53E-1EFB-407D-8F0A-5FFA454364E8}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{B03DE53E-1EFB-407D-8F0A-5FFA454364E8} = {E82BB040-2AC0-41DC-BF62-1D4620D4D501}
+	EndGlobalSection
+EndGlobal
