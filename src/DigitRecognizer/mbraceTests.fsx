@@ -38,7 +38,7 @@ let evaluateDistributed (classifier : Classifier) (training : CloudSequence<Trai
             |> Stream.length
     }
 
-    let! successful = validation |> Distributed.reduceCombine evaluateSingleThreaded (Local.lift Array.sum)
+    let! successful = validation |> DivideAndConquer.reduceCombine evaluateSingleThreaded (Local.lift Array.sum)
     return float successful / float validation.Length
 }
 
