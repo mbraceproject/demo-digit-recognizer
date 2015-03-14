@@ -13,21 +13,30 @@ open Nessos.Streams
 open DigitRecognizer
 open DigitRecognizer.Knn
 
-let trainPath = __SOURCE_DIRECTORY__ + "/../../data/train.csv"
-let testPath = __SOURCE_DIRECTORY__ + "/../../data/test.csv"
-
-let training = TrainingImage.Parse trainPath
-
-let training' = training.[ .. 39999]
-let validation = training.[40000 ..]
-
 // First connect to the cluster
 let cluster = Runtime.GetHandle(config)
+cluster.AttachClientLogger(new MBrace.Azure.ConsoleLogger())
 
-// Save training set as cloud reference in Azure store, returning a typed reference to data
-let trainingRef = cluster.DefaultStoreClient.CloudSequence.New training'
+// use zipped .csv files
+let trainPathGz = __SOURCE_DIRECTORY__ + "/../../data/train.csv.gz"
+let testPathGz = __SOURCE_DIRECTORY__ + "/../../data/test.csv.gz"
 
-let evaluateDistributed (classifier : Classifier) (training : CloudSequence<TrainingImage>) (validation : TrainingImage []) = cloud {
+// upload to store; expect ~30sec for each file
+let cloudTrainGz = cluster.DefaultStoreClient.FileStore.File.Upload trainPathGz
+let cloudTestGz = cluster.DefaultStoreClient.FileStore.File.Upload testPathGz
+
+// create a lazy, distributed reference to the data by attaching a deserialize function to the cloud file
+let cloudTraining = cluster.RunLocal(TrainingImage.Parse(cloudTrainGz, decompress = true))
+let cloudTest = cluster.RunLocal(Image.Parse(cloudTestGz, decompress = true))
+
+// test entities
+cloudTraining.ToEnumerable() |> cluster.RunLocal |> Seq.take 10 |> Seq.toArray
+cloudTest.ToEnumerable() |> cluster.RunLocal |> Seq.take 10 |> Seq.toArray
+
+cluster.Run(local { let! seq = cloudTraining.ToEnumerable() in return Seq.take 10 seq |> Seq.toArray })
+
+// distributed validation workflow
+let validateDistributed (classifier : Classifier) (trainingRef : CloudSequence<TrainingImage>) (validation : TrainingImage []) = cloud {
     let evaluateSingleThreaded (validation : TrainingImage []) = local {
         let! _ = trainingRef.PopulateCache() // cache to local memory for future use
         let! training = trainingRef.ToArray()
@@ -42,6 +51,32 @@ let evaluateDistributed (classifier : Classifier) (training : CloudSequence<Trai
     return float successful / float validation.Length
 }
 
-let job = evaluateDistributed (knn l2 10) trainingRef validation |> cluster.CreateProcess
+// distributed classification workflow
+let classifyDistributed (classifier : Classifier) (trainingRef : CloudSequence<TrainingImage>) (images : Image []) = cloud {
+    let evaluateSingleThreaded (images : Image []) = local {
+        let! _ = trainingRef.PopulateCache() // cache to local memory for future use
+        let! training = trainingRef.ToArray()
+        return images |> Array.map (fun img -> img.Id, classifier training img)
+    }
 
-job.AwaitResult()
+    let! successful = images |> DivideAndConquer.reduceCombine evaluateSingleThreaded (Local.lift Array.concat)
+    return successful
+}
+
+// warmup: force in-memory caching of entities in cloud
+let cache() = cloud {
+    let! s1 = cloudTraining.PopulateCache()
+    let! s2 = cloudTest.PopulateCache()
+    return s1 && s2
+}
+
+let cacheJob = cluster.CreateProcess(Cloud.ParallelEverywhere(cache()))
+cacheJob.ShowInfo()
+
+
+// test: try running a classification job
+cluster.Run(
+    cloud {
+        let! images = cloudTest.ToArray()
+        return! classifyDistributed (knn l2 10) cloudTraining images
+    })

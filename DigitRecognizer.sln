@@ -8,7 +8,9 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "data", "data", "{332680E0-AFD0-40E9-997A-A0D6DEFDACC0}"
 	ProjectSection(SolutionItems) = preProject
 		data\test.csv = data\test.csv
+		data\test.csv.gz = data\test.csv.gz
 		data\train.csv = data\train.csv
+		data\train.csv.gz = data\train.csv.gz
 	EndProjectSection
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "DigitRecognizer", "src\DigitRecognizer\DigitRecognizer.fsproj", "{B03DE53E-1EFB-407D-8F0A-5FFA454364E8}"
