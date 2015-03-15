@@ -16,6 +16,8 @@ open DigitRecognizer.Knn
 // First connect to the cluster
 let cluster = Runtime.GetHandle(config)
 cluster.AttachClientLogger(new MBrace.Azure.ConsoleLogger())
+// let cluster = Runtime.InitLocal(config, workerCount = 2)
+
 
 // use zipped .csv files
 let trainPathGz = __SOURCE_DIRECTORY__ + "/../../data/train.csv.gz"
@@ -47,7 +49,7 @@ let validateDistributed (classifier : Classifier) (trainingRef : CloudSequence<T
             |> Stream.length
     }
 
-    let! successful = validation |> DivideAndConquer.reduceCombine evaluateSingleThreaded (Local.lift Array.sum)
+    let! successful = validation |> DivideAndConquer.reduceCombine evaluateSingleThreaded (fun cs -> local { return Array.sum cs })
     return float successful / float validation.Length
 }
 
@@ -59,24 +61,29 @@ let classifyDistributed (classifier : Classifier) (trainingRef : CloudSequence<T
         return images |> Array.map (fun img -> img.Id, classifier training img)
     }
 
-    let! successful = images |> DivideAndConquer.reduceCombine evaluateSingleThreaded (Local.lift Array.concat)
+    let! successful = images |> DivideAndConquer.reduceCombine evaluateSingleThreaded (fun cs -> local { return Array.concat cs })
     return successful
 }
 
 // warmup: force in-memory caching of entities in cloud
-let cache() = cloud {
-    let! s1 = cloudTraining.PopulateCache()
-    let! s2 = cloudTest.PopulateCache()
-    return s1 && s2
-}
+let cache () = 
+    cloud {
+        let! s1 = cloudTraining.PopulateCache()
+        let! s2 = cloudTest.PopulateCache()
+        return s1 && s2
+    } |> Cloud.ParallelEverywhere
 
-let cacheJob = cluster.CreateProcess(Cloud.ParallelEverywhere(cache()))
+let cacheJob = cluster.CreateProcess(cache())
 cacheJob.ShowInfo()
-
+cacheJob.AwaitResult()
 
 // test: try running a classification job
-cluster.Run(
+let classifyJob =
     cloud {
         let! images = cloudTest.ToArray()
         return! classifyDistributed (knn l2 10) cloudTraining images
-    })
+    } |> cluster.CreateProcess
+
+classifyJob.ShowInfo()
+cluster.ShowWorkers()
+classifyJob.AwaitResult()
