@@ -26,7 +26,6 @@ type Stream =
             while not sr.EndOfStream do yield sr.ReadLine () }
         |> Stream.ofSeq
 
-
 type TrainingImage with
 
     /// Parses a training set from text using the Kaggle digit recognizer CSV format
@@ -89,3 +88,16 @@ type Classifications =
     static member Write(outFile : string, classifications : (ImageId * Classification) [], ?encoding : Encoding, ?compress) =
         use fs = File.OpenWrite(outFile)
         Classifications.Write(fs, classifications, ?encoding = encoding, ?compress = compress)
+
+
+module Balanced =
+    let reduceCombine (reducer : 'T [] -> Local<'S>) (combiner : 'S [] -> Local<'R>) (inputs : 'T []) = cloud {
+        let! workers = Cloud.GetAvailableWorkers()
+        let! results =
+            inputs
+            |> WorkerRef.partitionWeighted workers
+            |> Seq.map (fun (w,ts) -> reducer ts, w)
+            |> Cloud.Parallel
+
+        return! combiner results
+    }

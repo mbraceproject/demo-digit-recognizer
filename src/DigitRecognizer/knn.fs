@@ -32,7 +32,9 @@
 
     /// local multicore classification
     let classifyLocalMulticore (classifier : Classifier) (training : TrainingImage []) (images : Image []) =
-        Array.Parallel.map (classifier training) images
+        ParStream.ofArray images
+        |> ParStream.map (fun img -> img.Id, classifier training img)
+        |> ParStream.toArray
 
     /// local multicore validation
     let validateLocalMulticore (classifier : Classifier) (training : TrainingImage []) (validation : TrainingImage []) =

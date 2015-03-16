@@ -39,17 +39,13 @@ cluster.Run(local { let! seq = cloudTraining.ToEnumerable() in return Seq.take 1
 
 // distributed validation workflow
 let validateDistributed (classifier : Classifier) (trainingRef : CloudSequence<TrainingImage>) (validation : TrainingImage []) = cloud {
-    let evaluateSingleThreaded (validation : TrainingImage []) = local {
+    let validateLocal (validation : TrainingImage []) = local {
         let! _ = trainingRef.PopulateCache() // cache to local memory for future use
         let! training = trainingRef.ToArray()
-        return
-            validation
-            |> Stream.ofArray
-            |> Stream.filter (fun timg -> timg.Classification = classifier training timg.Image)
-            |> Stream.length
+        return validateLocalMulticore classifier training validation
     }
 
-    let! successful = validation |> DivideAndConquer.reduceCombine evaluateSingleThreaded (fun cs -> local { return Array.sum cs })
+    let! successful = validation |> Balanced.reduceCombine validateLocal (fun cs -> local { return Array.sum cs })
     return float successful / float validation.Length
 }
 
@@ -58,10 +54,10 @@ let classifyDistributed (classifier : Classifier) (trainingRef : CloudSequence<T
     let evaluateSingleThreaded (images : Image []) = local {
         let! _ = trainingRef.PopulateCache() // cache to local memory for future use
         let! training = trainingRef.ToArray()
-        return images |> Array.map (fun img -> img.Id, classifier training img)
+        return classifyLocalMulticore classifier training images
     }
 
-    let! successful = images |> DivideAndConquer.reduceCombine evaluateSingleThreaded (fun cs -> local { return Array.concat cs })
+    let! successful = images |> Balanced.reduceCombine evaluateSingleThreaded (fun cs -> local { return Array.concat cs })
     return successful
 }
 
@@ -76,6 +72,7 @@ let cache () =
 let cacheJob = cluster.CreateProcess(cache())
 cacheJob.ShowInfo()
 cacheJob.AwaitResult()
+cluster.ShowLogs()
 
 // test: try running a classification job
 let classifyJob =

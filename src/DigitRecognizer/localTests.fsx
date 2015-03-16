@@ -18,10 +18,10 @@ let classifier = knn l2 10
 
 #time
 
-// Performance (quad core i7 cpu)
+// Performance (3.5Ghz Quad Core i7 CPU)
 // Real: 00:15:30.855, CPU: 01:56:59.842, GC gen0: 2960, gen1: 2339, gen2: 1513
 classifyLocalMulticore classifier training test
 
-// Performance (quad core i7 cpu)
+// Performance (3.5Ghz Quad Core i7 CPU)
 // Real: 00:01:02.281, CPU: 00:07:51.481, GC gen0: 179, gen1: 82, gen2: 62
 validateLocalMulticore classifier training' validation
