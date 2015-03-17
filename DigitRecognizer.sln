@@ -4,6 +4,10 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 12.0.31101.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{E82BB040-2AC0-41DC-BF62-1D4620D4D501}"
+	ProjectSection(SolutionItems) = preProject
+		src\DigitRecognizer\0-Naive-Baseline.fsx = src\DigitRecognizer\0-Naive-Baseline.fsx
+		src\DigitRecognizer\1-Naive-Baseline-mbrace.fsx = src\DigitRecognizer\1-Naive-Baseline-mbrace.fsx
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "data", "data", "{332680E0-AFD0-40E9-997A-A0D6DEFDACC0}"
 	ProjectSection(SolutionItems) = preProject

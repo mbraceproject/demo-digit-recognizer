@@ -32,7 +32,6 @@ open MBrace.Azure.Client
 let cluster = Runtime.GetHandle(config)
 cluster.AttachClientLogger(new MBrace.Azure.ConsoleLogger())
 
-
 let dataFolder = __SOURCE_DIRECTORY__ + "/../../data/"
 
 let trainPath = dataFolder + "train.csv"
@@ -41,15 +40,22 @@ let submissionPath = dataFolder + "submission.csv"
 
 // move csv files to cluster storage
 
-let cloudTrain = cluster.DefaultStoreClient.FileStore.File.Upload trainPath
-let cloudTest = cluster.DefaultStoreClient.FileStore.File.Upload testPath
+let mbraceDataFolder = cluster.DefaultStoreClient.FileStore.File
+
+let cloudTrain =
+    match mbraceDataFolder.Enumerate() |> Seq.tryFind(fun file -> file.Path.Contains "train.csv") with
+    | Some file -> file
+    | None -> mbraceDataFolder.Upload trainPath
+
+let cloudTest =
+    match mbraceDataFolder.Enumerate() |> Seq.tryFind(fun file -> file.Path.Contains "test.csv") with
+    | Some file -> file
+    | None -> mbraceDataFolder.Upload testPath
 
 // Reading the 50,000 known examples in memory.
-
-let learn () =
-
+let learn =
     cloud {
-
+        //TODO: Cache this later
         let! lines = 
             cloudTrain.Path
             |> CloudFile.ReadAllLines
@@ -82,35 +88,40 @@ let learn () =
 
 // Read the 20,000 benchmark images we are trying
 // to predict.
-
 let testing =
-            testPath
-            |> File.ReadAllLines
-            |> fun lines -> lines.[1..]
+    cloud {
+        let! lines = cloudTest.Path |> CloudFile.ReadAllLines
+        return            
+            lines.[1..]
             |> Array.map (fun line -> line.Split ',' |> Array.map int)
             |> Array.mapi (fun i image -> 
-                { ImageId = i + 1; Image = image } ) 
+                { ImageId = i + 1; Image = image } )
+    }
 
 // Create a submission file:
 // for each of the 20,000 images, produce
 // a predicted label, and save the ImageId
 // and prediction into a file.
-
-let classifier = learn ()
-
 let createSubmission =
-    
-    let predictions =
-        testing
-        |> Array.map (fun test -> 
-            cloud { 
-                let! predict = classifier
-                return sprintf "%i,%i" test.ImageId (predict test.Image) })
-        |> Cloud.Parallel
-        |> cluster.Run
+    cloud {
+        let! lines = cloudTest.Path |> CloudFile.ReadAllLines
+        let cloudImages =
+            lines.[1..]
+            |> Array.map (fun line -> line.Split ',' |> Array.map int)
+            |> Array.mapi (fun i image -> 
+                { ImageId = i + 1; Image = image } )
+        
+        return!
+            cloudImages.[ .. 10]
+            |> Array.map (fun test -> 
+                cloud { 
+                    let! predict = learn
+                    return test.ImageId, (predict test.Image) })
+            |> Cloud.Parallel
+    } |> cluster.Run
 
-    [|
-        yield "ImageId,Label"
-        yield! predictions
-    |]
-    |> fun predictions -> File.WriteAllLines(submissionPath,predictions)
+//    [|
+//        yield "ImageId,Label"
+//        yield! predictions
+//    |]
+//    |> fun predictions -> File.WriteAllLines(submissionPath,predictions)

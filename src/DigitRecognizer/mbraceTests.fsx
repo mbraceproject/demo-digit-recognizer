@@ -18,7 +18,6 @@ let cluster = Runtime.GetHandle(config)
 cluster.AttachClientLogger(new MBrace.Azure.ConsoleLogger())
 // let cluster = Runtime.InitLocal(config, workerCount = 2)
 
-
 // use zipped .csv files
 let trainPathGz = __SOURCE_DIRECTORY__ + "/../../data/train.csv.gz"
 let testPathGz = __SOURCE_DIRECTORY__ + "/../../data/test.csv.gz"
