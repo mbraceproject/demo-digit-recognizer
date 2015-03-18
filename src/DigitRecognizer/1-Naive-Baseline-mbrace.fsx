@@ -1,8 +1,6 @@
 ﻿(*
-Entirely local model, using no libraries.
+Replicating the Naive Baseline, running computations on mbrace.
 "Simplest possible model": 1-nearest neighbor, euclidean distance.
-Quad core i7, end-to-end execution:
-Real: 00:05:59.484, CPU: 00:22:08.671, GC gen0: 428, gen1: 423, gen2: 6
 *)
 
 (*
@@ -32,30 +30,30 @@ open MBrace.Azure.Client
 let cluster = Runtime.GetHandle(config)
 cluster.AttachClientLogger(new MBrace.Azure.ConsoleLogger())
 
-let dataFolder = __SOURCE_DIRECTORY__ + "/../../data/"
-
-let trainPath = dataFolder + "train.csv"
-let testPath = dataFolder +  "test.csv"
-let submissionPath = dataFolder + "submission.csv"
-
-// move csv files to cluster storage
-
-let mbraceDataFolder = cluster.DefaultStoreClient.FileStore.File
 let logInfo message =
     cloud {
         let! worker = Cloud.CurrentWorker
         return! Cloud.Log <| sprintf "%s: %s" worker.Id message
     }
 
-let cloudTrain =
-    match mbraceDataFolder.Enumerate() |> Seq.tryFind(fun file -> file.Path.Contains "train.csv") with
-    | Some file -> file
-    | None -> mbraceDataFolder.Upload trainPath
+let trainFileName = "train.csv"
+let testFileName = "test.csv"
+let submissionFileName = "submission.csv"
 
-let cloudTest =
-    match mbraceDataFolder.Enumerate() |> Seq.tryFind(fun file -> file.Path.Contains "test.csv") with
+let localDataFolder = __SOURCE_DIRECTORY__ + "/../../data/"
+let localPath (fileName:string) = localDataFolder + fileName
+
+// move csv files to cluster storage
+
+let mbraceDataFolder = cluster.DefaultStoreClient.FileStore.File
+
+let upload (fileName:string) =
+    match mbraceDataFolder.Enumerate() |> Seq.tryFind(fun file -> file.Path.Contains fileName) with
     | Some file -> file
-    | None -> mbraceDataFolder.Upload testPath
+    | None -> mbraceDataFolder.Upload (localPath fileName)
+
+let cloudTrain = upload trainFileName
+let cloudTest = upload testFileName
 
 // Reading the 50,000 known examples in memory.
 
@@ -79,7 +77,7 @@ let buildTrainingSet =
         return training
     }
 
-let predict (trainingSet:Example array) =
+let predict (trainingSet:Example []) =
     // Euclidean distance between 2 images.
     let size = 28 * 28
     let distance (img1:Image) (img2:Image) =
