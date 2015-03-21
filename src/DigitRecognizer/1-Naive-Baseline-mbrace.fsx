@@ -82,21 +82,17 @@ let predict (trainingSet:Example []) =
 module Caching =
     /// Caches a CloudFile across the cluster, with an optional handler to preprocess the data before insertion.
     let private CacheAcrossCluster cacheName handler (cloudFile:CloudFile) =
-        cloud {
-            do! logInfo <| sprintf "Checking cache for existing of %s..." cacheName
+        local {
             if not (MemoryCache.Default.Contains cacheName) then
-                do! logInfo "Item not in cache, building..."
+                do! logInfo <| sprintf "Adding %s to in-memory cache." cacheName
                 let! lines = cloudFile.Path |> CloudFile.ReadAllLines
                 let cacheableObject = handler lines
                 return (MemoryCache.Default.Add(cacheName, cacheableObject, CacheItemPolicy()) |> ignore)
-            else
-                do! logInfo "Cache is already filled."
-                return()
+            else return()
         } |> Cloud.ParallelEverywhere |> Cloud.Ignore
     
     let GetTrainingSet() = MemoryCache.Default.[trainFileName] :?> Example[]
     let GetBenchmarkSet() = MemoryCache.Default.[testFileName] :?> Benchmark[]
-
     let CacheExampleFile() =
         let handler (lines:string array) =
             lines.[1..]
@@ -112,35 +108,51 @@ module Caching =
         cloudTest |> CacheAcrossCluster testFileName handler
     
     let Clear() =
-        cloud {
-            MemoryCache.Default.Remove(testFileName) |> ignore
-            MemoryCache.Default.Remove(trainFileName) |> ignore
+        local {
+            [ testFileName; trainFileName ]
+            |> List.map MemoryCache.Default.Remove
+            |> ignore
         } |> Cloud.ParallelEverywhere |> cluster.Run
 
-// The actual job to do everything.
-#time
-let createSubmission =
-    cloud {
-        do! Caching.CacheExampleFile()
-        do! Caching.CacheBenchmarkFile()
+module JobSubmission =
+    /// Creates a submission using a supplied prediction function
+    let CreateSubmission predictionFunction =
+        cloud {
+            do! logInfo "Priming caches..."
+            do! Caching.CacheExampleFile()
+            do! Caching.CacheBenchmarkFile()
+    
+            let benchmark = Caching.GetBenchmarkSet()            
+            do! logInfo "Starting processing..."
+            return!
+                benchmark
+                |> DivideAndConquer.map(fun test ->
+                    local { 
+                        let trainingSet = Caching.GetTrainingSet()
+                        let (prediction:int) = predictionFunction trainingSet test.Image
+                        return test.ImageId, prediction }) }
+    
+    /// Saves a submission file for the supplied predictions.
+    let SaveSubmission outfile predictions =
+        let lines =
+            "ImageId,Label"
+            :: (predictions
+                |> Seq.map(fun (rowId, value) -> sprintf "%O,%O" rowId value)
+                |> Seq.toList)
+            |> Seq.toArray
+        File.WriteAllLines(outfile, lines)
+    
+    /// Orchestrates a job to calculate the predictions and saves the results on completion.
+    let PredictAndSave predictionFunction outfile =
+        let job = CreateSubmission predictionFunction |> cluster.CreateProcess
+        async {
+            let! result = job.AwaitResultAsync()
+            result |> SaveSubmission outfile
+        } |> Async.Start
+        job
 
-        let benchmark = Caching.GetBenchmarkSet()            
-        return!
-            benchmark.[ .. 4096]
-            |> DivideAndConquer.map(fun test ->
-                local { 
-                    let trainingSet = Caching.GetTrainingSet()
-                    let prediction = predict trainingSet test.Image
-                    return test.ImageId, prediction })
-    } |> cluster.CreateProcess
-
-createSubmission.ShowInfo()
-createSubmission.ShowLogs()
-createSubmission.AwaitResult()
+let submission = JobSubmission.PredictAndSave predict @"C:\users\isaac\desktop\kaggle.csv"
+submission.ShowInfo()
+submission.ShowLogs()
 cluster.ShowWorkers()
-
-//    [|
-//        yield "ImageId,Label"
-//        yield! predictions
-//    |]
-//    |> fun predictions -> File.WriteAllLines(submissionPath,predictions)
+submission.AwaitResult()
