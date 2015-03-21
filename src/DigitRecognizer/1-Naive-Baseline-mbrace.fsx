@@ -14,24 +14,27 @@ type Image = int []
 type Example = { Label: int; Image: Image }
 type Benchmark = { ImageId: int; Image: Image }
 
-open System.IO
 
 (*
 Connect to Cluster
 *)
 
 #load "credentials.fsx"
+#r "System.Runtime.Caching.dll"
 
 open MBrace
 open MBrace.Store
 open MBrace.Workflows
 open MBrace.Azure.Client
+open System.IO
+open System.Runtime.Caching
 
 let cluster = Runtime.GetHandle(config)
 cluster.AttachClientLogger(new MBrace.Azure.ConsoleLogger())
+cluster.ShowWorkers()
 
 let logInfo message =
-    cloud {
+    local {
         let! worker = Cloud.CurrentWorker
         return! Cloud.Log <| sprintf "%s: %s" worker.Id message
     }
@@ -40,43 +43,22 @@ let trainFileName = "train.csv"
 let testFileName = "test.csv"
 let submissionFileName = "submission.csv"
 
-let localDataFolder = __SOURCE_DIRECTORY__ + "/../../data/"
-let localPath (fileName:string) = localDataFolder + fileName
+let localPath (fileName:string) =
+    let localDataFolder = __SOURCE_DIRECTORY__ + "/../../data/"
+    localDataFolder + fileName
 
 // move csv files to cluster storage
-
 let mbraceDataFolder = cluster.DefaultStoreClient.FileStore.File
-
+   
 let upload (fileName:string) =
     match mbraceDataFolder.Enumerate() |> Seq.tryFind(fun file -> file.Path.Contains fileName) with
     | Some file -> file
     | None -> mbraceDataFolder.Upload (localPath fileName)
-
+    
 let cloudTrain = upload trainFileName
 let cloudTest = upload testFileName
 
 // Reading the 50,000 known examples in memory.
-
-let buildTrainingSet =
-    cloud {
-        //TODO: Cache this later
-        do! logInfo "Reading training set..."
-        let! lines = 
-            cloudTrain.Path
-            |> CloudFile.ReadAllLines
-        do! logInfo <| sprintf "Read (%d) lines" lines.Length
-
-        let training =
-            lines
-            |> fun lines -> lines.[1..]
-            |> Array.map (fun line -> line.Split ',' |> Array.map int)
-            |> Array.map (fun line ->
-                { Label = line.[0]; Image = line.[1..] })
-
-        do! logInfo "Built training set."
-        return training
-    }
-
 let predict (trainingSet:Example []) =
     // Euclidean distance between 2 images.
     let size = 28 * 28
@@ -95,37 +77,68 @@ let predict (trainingSet:Example []) =
         |> Seq.minBy (fun example -> distance example.Image img)
         |> fun closest -> closest.Label
 
-// Create a submission file:
-// for each of the 20,000 images, produce
-// a predicted label, and save the ImageId
-// and prediction into a file.
-#time
 
-let createSubmission =
-    cloud {
-        do! logInfo "Reading test set..."
-        let! lines = cloudTest.Path |> CloudFile.ReadAllLines
-        do! logInfo "Read test set."
-        let cloudImages =
+/// Some helper functions for caching data across the cluster.
+module Caching =
+    /// Caches a CloudFile across the cluster, with an optional handler to preprocess the data before insertion.
+    let private CacheAcrossCluster cacheName handler (cloudFile:CloudFile) =
+        cloud {
+            do! logInfo <| sprintf "Checking cache for existing of %s..." cacheName
+            if not (MemoryCache.Default.Contains cacheName) then
+                do! logInfo "Item not in cache, building..."
+                let! lines = cloudFile.Path |> CloudFile.ReadAllLines
+                let cacheableObject = handler lines
+                return (MemoryCache.Default.Add(cacheName, cacheableObject, CacheItemPolicy()) |> ignore)
+            else
+                do! logInfo "Cache is already filled."
+                return()
+        } |> Cloud.ParallelEverywhere |> Cloud.Ignore
+    
+    let GetTrainingSet() = MemoryCache.Default.[trainFileName] :?> Example[]
+    let GetBenchmarkSet() = MemoryCache.Default.[testFileName] :?> Benchmark[]
+
+    let CacheExampleFile() =
+        let handler (lines:string array) =
             lines.[1..]
             |> Array.map (fun line -> line.Split ',' |> Array.map int)
-            |> Array.mapi (fun i image -> 
-                { ImageId = i + 1; Image = image } )
-        do! logInfo "Built unknown images."
+            |> Array.map (fun line -> { Label = line.[0]; Image = line.[1..] })
+        cloudTrain |> CacheAcrossCluster trainFileName handler
+    
+    let CacheBenchmarkFile() =
+        let handler (lines:string array) =
+            lines.[1..]
+            |> Array.map (fun line -> line.Split ',' |> Array.map int)
+            |> Array.mapi (fun i image -> { ImageId = i + 1; Image = image } )
+        cloudTest |> CacheAcrossCluster testFileName handler
+    
+    let Clear() =
+        cloud {
+            MemoryCache.Default.Remove(testFileName) |> ignore
+            MemoryCache.Default.Remove(trainFileName) |> ignore
+        } |> Cloud.ParallelEverywhere |> cluster.Run
+
+// The actual job to do everything.
+#time
+let createSubmission =
+    cloud {
+        do! Caching.CacheExampleFile()
+        do! Caching.CacheBenchmarkFile()
+
+        let benchmark = Caching.GetBenchmarkSet()            
         return!
-            cloudImages.[ .. 10]
-            |> Array.map (fun test -> 
-                cloud { 
-                    do! logInfo <| sprintf "Predicting ImageId %d" test.ImageId
-                    let! trainingSet = buildTrainingSet
+            benchmark.[ .. 4096]
+            |> DivideAndConquer.map(fun test ->
+                local { 
+                    let trainingSet = Caching.GetTrainingSet()
                     let prediction = predict trainingSet test.Image
-                    do! logInfo <| sprintf "Predicted %d" prediction
                     return test.ImageId, prediction })
-            |> Cloud.Parallel
     } |> cluster.CreateProcess
 
-createSubmission.GetLogs()
-cluster.GetProcess "4d5c065f51b94f3c9ac47fdba7fcb59d" |> fun x -> x.ShowLogs()
+createSubmission.ShowInfo()
+createSubmission.ShowLogs()
+createSubmission.AwaitResult()
+cluster.ShowWorkers()
+
 //    [|
 //        yield "ImageId,Label"
 //        yield! predictions
