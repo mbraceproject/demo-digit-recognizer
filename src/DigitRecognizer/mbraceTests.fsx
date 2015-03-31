@@ -2,6 +2,7 @@
 #I "../../bin"
 #r "Streams.Core.dll"
 #r "DigitRecognizer.dll"
+#time "on"
 
 open MBrace
 open MBrace.Store
@@ -17,6 +18,7 @@ open DigitRecognizer.Knn
 let cluster = Runtime.GetHandle(config)
 cluster.AttachClientLogger(new MBrace.Azure.ConsoleLogger())
 // let cluster = Runtime.InitLocal(config, workerCount = 2)
+// cluster.AttachLocalWorker()
 
 // use zipped .csv files
 let trainPathGz = __SOURCE_DIRECTORY__ + "/../../data/train.csv.gz"
