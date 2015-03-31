@@ -48,7 +48,7 @@ let distance (img1:Image) (img2:Image) =
 // image from the 50,000 known training images.
 let closest img =
     training
-    |> Seq.minBy (fun example -> distance example.Image img)
+    |> Array.minBy (fun example -> distance example.Image img)
     |> fun closest -> closest.Label
 
 // Read the 20,000 benchmark images we are trying

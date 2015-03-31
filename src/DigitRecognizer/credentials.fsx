@@ -1,4 +1,4 @@
-﻿#load "../../packages/MBrace.Azure.Client/bootstrap.fsx"
+﻿#load "../../packages/MBrace.Azure.Standalone/MBrace.Azure.fsx"
 
 namespace global
 
