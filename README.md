@@ -1,3 +1,3 @@
-## KNN Digit recognizer
+## MBrace KNN Digit recognizer
 
-using MBrace
+See https://www.kaggle.com/c/digit-recognizer
