@@ -48,7 +48,7 @@ let localPath (fileName:string) =
     localDataFolder + fileName
 
 // move csv files to cluster storage
-let mbraceDataFolder = cluster.DefaultStoreClient.FileStore.File
+let mbraceDataFolder = cluster.StoreClient.FileStore.File
    
 let upload (fileName:string) =
     match mbraceDataFolder.Enumerate() |> Seq.tryFind(fun file -> file.Path.Contains fileName) with
