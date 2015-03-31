@@ -23,8 +23,8 @@ let trainPathGz = __SOURCE_DIRECTORY__ + "/../../data/train.csv.gz"
 let testPathGz = __SOURCE_DIRECTORY__ + "/../../data/test.csv.gz"
 
 // upload to store; expect ~30sec for each file
-let cloudTrainGz = cluster.DefaultStoreClient.FileStore.File.Upload trainPathGz
-let cloudTestGz = cluster.DefaultStoreClient.FileStore.File.Upload testPathGz
+let cloudTrainGz = cluster.StoreClient.FileStore.File.Upload trainPathGz
+let cloudTestGz = cluster.StoreClient.FileStore.File.Upload testPathGz
 
 // create a lazy, distributed reference to the data by attaching a deserialize function to the cloud file
 let cloudTraining = cluster.RunLocal(TrainingImage.Parse(cloudTrainGz, decompress = true))
