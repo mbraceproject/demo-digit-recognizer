@@ -17,7 +17,11 @@ open DigitRecognizer.Knn
 // First connect to the cluster
 let cluster = Runtime.GetHandle(config)
 cluster.AttachClientLogger(new MBrace.Azure.ConsoleLogger())
+
+// initialize a local standalone cluster
 // let cluster = Runtime.InitLocal(config, workerCount = 2)
+
+// attach a local worker to cluster
 // cluster.AttachLocalWorker()
 
 // use zipped .csv files
