@@ -47,6 +47,7 @@
     <Compile Include="KNN.fs" />
     <None Include="localTests.fsx" />
     <None Include="mbraceTestsSimple.fsx" />
+    <None Include="mbraceTestsFlow.fsx" />
     <None Include="mbraceTestsCached.fsx" />
     <None Include="paket.references" />
     <None Include="credentials.fsx" />
