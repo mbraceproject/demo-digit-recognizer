@@ -1,4 +1,5 @@
-﻿#load "../../packages/MBrace.Azure.Standalone/MBrace.Azure.fsx"
+﻿#I "../../packages/MBrace.Azure.Standalone/tools" 
+#load "../../packages/MBrace.Azure.Standalone/MBrace.Azure.fsx"
 
 namespace global
 
