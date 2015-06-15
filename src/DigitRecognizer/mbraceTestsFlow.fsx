@@ -4,7 +4,7 @@
 #r "MBrace.Flow.dll"
 #r "DigitRecognizer.dll"
 
-open MBrace
+open MBrace.Core
 open MBrace.Flow
 open MBrace.Workflows
 open MBrace.Azure.Client
@@ -49,13 +49,13 @@ let tests = Image.Parse testPath
 //
 
 let classify (classifier : Classifier) (images : Image []) =
-    CloudFlow.ofArray images
+    CloudFlow.OfArray images
     |> CloudFlow.map (fun img -> img.Id, classifier training img)
     |> CloudFlow.toArray
 
 let validate (classifier : Classifier) (validation : TrainingImage []) = cloud {
     let! successCount =
-        CloudFlow.ofArray validation
+        CloudFlow.OfArray validation
         |> CloudFlow.filter (fun tI -> classifier training tI.Image = tI.Classification)
         |> CloudFlow.length
 

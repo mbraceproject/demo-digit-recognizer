@@ -4,7 +4,9 @@
 #r "DigitRecognizer.dll"
 #time "on"
 
-open MBrace
+open System.IO
+
+open MBrace.Core
 open MBrace.Store
 open MBrace.Workflows
 open MBrace.Azure.Client
@@ -29,23 +31,25 @@ let trainPathGz = __SOURCE_DIRECTORY__ + "/../../data/train.csv.gz"
 let testPathGz = __SOURCE_DIRECTORY__ + "/../../data/test.csv.gz"
 
 // upload to store; expect ~30sec for each file
-let cloudTrainGz = cluster.StoreClient.FileStore.File.Upload trainPathGz
-let cloudTestGz = cluster.StoreClient.FileStore.File.Upload testPathGz
+let dir = cluster.StoreClient.Path.GetRandomDirectoryName()
+let (@@) (x : string) (y : string) = cluster.StoreClient.Path.Combine(x ,y)
+let cloudTrainGz = cluster.StoreClient.File.Upload(trainPathGz, targetPath = dir @@ Path.GetFileName trainPathGz, overwrite = false)
+let cloudTestGz = cluster.StoreClient.File.Upload(testPathGz, targetPath = dir @@ Path.GetFileName testPathGz, overwrite = false)
 
 // create a lazy, distributed reference to the data by attaching a deserialize function to the cloud file
-let cloudTraining = cluster.RunLocal(TrainingImage.Parse(cloudTrainGz, decompress = true))
-let cloudTest = cluster.RunLocal(Image.Parse(cloudTestGz, decompress = true))
+let cloudTraining = cluster.RunLocally(TrainingImage.Parse(cloudTrainGz, decompress = true))
+let cloudTest = cluster.RunLocally(Image.Parse(cloudTestGz, decompress = true))
 
 // test entities
-cloudTraining.ToEnumerable() |> cluster.RunLocal |> Seq.take 10 |> Seq.toArray
-cloudTest.ToEnumerable() |> cluster.RunLocal |> Seq.take 10 |> Seq.toArray
+cloudTraining.ToEnumerable() |> cluster.RunLocally |> Seq.take 10 |> Seq.toArray
+cloudTest.ToEnumerable() |> cluster.RunLocally |> Seq.take 10 |> Seq.toArray
 
 cluster.Run(local { let! seq = cloudTraining.ToEnumerable() in return Seq.take 10 seq |> Seq.toArray })
 
 // distributed validation workflow
 let validateDistributed (classifier : Classifier) (trainingRef : CloudSequence<TrainingImage>) (validation : TrainingImage []) = cloud {
     let validateLocal (validation : TrainingImage []) = local {
-        let! _ = trainingRef.PopulateCache() // cache to local memory for future use
+        let! _ = trainingRef.ForceCache() // cache to local memory for future use
         let! training = trainingRef.ToArray()
         return validateLocalMulticore classifier training validation
     }
@@ -57,7 +61,7 @@ let validateDistributed (classifier : Classifier) (trainingRef : CloudSequence<T
 // distributed classification workflow
 let classifyDistributed (classifier : Classifier) (trainingRef : CloudSequence<TrainingImage>) (images : Image []) = cloud {
     let evaluateSingleThreaded (images : Image []) = local {
-        let! _ = trainingRef.PopulateCache() // cache to local memory for future use
+        let! _ = trainingRef.ForceCache() // cache to local memory for future use
         let! training = trainingRef.ToArray()
         return classifyLocalMulticore classifier training images
     }
@@ -69,8 +73,8 @@ let classifyDistributed (classifier : Classifier) (trainingRef : CloudSequence<T
 // warmup: force in-memory caching of entities in cloud
 let cache () = 
     cloud {
-        let! s1 = cloudTraining.PopulateCache()
-        let! s2 = cloudTest.PopulateCache()
+        let! s1 = cloudTraining.ForceCache()
+        let! s2 = cloudTest.ForceCache()
         return s1 && s2
     } |> Cloud.ParallelEverywhere
 

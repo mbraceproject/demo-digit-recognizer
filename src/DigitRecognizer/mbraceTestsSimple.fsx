@@ -4,7 +4,7 @@
 #r "DigitRecognizer.dll"
 #time "on"
 
-open MBrace
+open MBrace.Core
 open MBrace.Workflows
 open MBrace.Azure.Client
 

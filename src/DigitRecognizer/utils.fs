@@ -6,7 +6,9 @@ open System.IO
 open System.IO.Compression
 open System.Text
 open Nessos.Streams
-open MBrace
+open MBrace.Core
+open MBrace.Store
+open MBrace.Core.Internals
 
 
 module Gzip =
@@ -48,7 +50,7 @@ type TrainingImage with
     /// Creates a cloud cell for a training image using supplied cloud file
     static member Parse(file : CloudFile, ?encoding, ?decompress, ?force) = local {
         let deserializer (s : System.IO.Stream) = TrainingImage.Parse(s, ?encoding = encoding, ?decompress = decompress) :> seq<_>
-        return! CloudSequence.FromFile(file.Path, deserializer, ?force = force)
+        return! CloudSequence.OfCloudFile(file.Path, deserializer, ?force = force)
     }
 
 
@@ -71,7 +73,7 @@ type Image with
     /// Creates a cloud sequence for a training image using supplied cloud file
     static member Parse(file : CloudFile, ?encoding, ?decompress, ?force) = local {
         let deserializer (s : System.IO.Stream) = Image.Parse(s, ?encoding = encoding, ?decompress = decompress) :> seq<_>
-        return! CloudSequence.FromFile(file.Path, deserializer, ?force = force)
+        return! CloudSequence.OfCloudFile(file.Path, deserializer, ?force = force)
     }
 
 
@@ -95,7 +97,7 @@ module Balanced =
         let! workers = Cloud.GetAvailableWorkers()
         let! results =
             inputs
-            |> WorkerRef.partitionWeighted workers
+            |> WorkerRef.partitionWeighted (fun w -> w.ProcessorCount) workers
             |> Seq.map (fun (w,ts) -> reducer ts, w)
             |> Cloud.Parallel
 
