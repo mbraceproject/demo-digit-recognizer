@@ -1,5 +1,4 @@
 ﻿#I "../../bin"
-#r "MBrace.Core.dll"
 #r "DigitRecognizer.dll"
 
 open DigitRecognizer

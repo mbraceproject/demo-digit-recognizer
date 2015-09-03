@@ -5,11 +5,11 @@ open System
 open System.IO
 open System.IO.Compression
 open System.Text
-open Nessos.Streams
-open MBrace.Core
-open MBrace.Store
-open MBrace.Core.Internals
 
+open Nessos.Streams
+
+open MBrace.Core
+open MBrace.Core.Internals
 
 module Gzip =
     let compress (stream : System.IO.Stream) = new GZipStream(stream, CompressionLevel.Optimal) :> Stream
@@ -47,12 +47,6 @@ type TrainingImage with
         use fs = File.OpenRead file
         TrainingImage.Parse(fs, ?decompress = decompress)
 
-    /// Creates a cloud cell for a training image using supplied cloud file
-    static member Parse(file : CloudFile, ?encoding, ?decompress, ?force) = local {
-        let deserializer (s : System.IO.Stream) = TrainingImage.Parse(s, ?encoding = encoding, ?decompress = decompress) :> seq<_>
-        return! CloudSequence.OfCloudFile(file.Path, deserializer, ?force = force)
-    }
-
 
 type Image with
 
@@ -70,12 +64,6 @@ type Image with
         use fs = File.OpenRead file
         Image.Parse(fs, ?decompress = decompress)
 
-    /// Creates a cloud sequence for a training image using supplied cloud file
-    static member Parse(file : CloudFile, ?encoding, ?decompress, ?force) = local {
-        let deserializer (s : System.IO.Stream) = Image.Parse(s, ?encoding = encoding, ?decompress = decompress) :> seq<_>
-        return! CloudSequence.OfCloudFile(file.Path, deserializer, ?force = force)
-    }
-
 
 type Classifications =
 
@@ -91,8 +79,15 @@ type Classifications =
         use fs = File.OpenWrite(outFile)
         Classifications.Write(fs, classifications, ?encoding = encoding, ?compress = compress)
 
-
 module Balanced =
+    /// <summary>
+    ///     Distributed Reduce/Combine workflow that partitions inputs according to cluster capacity.
+    ///     Assumes that the reducer combinator already utilises the multicore capacity of the worker
+    ///     it is running on.
+    /// </summary>
+    /// <param name="reducer">Reducer function.</param>
+    /// <param name="combiner">Combiner function.</param>
+    /// <param name="inputs">Input array.</param>
     let reduceCombine (reducer : 'T [] -> Local<'S>) (combiner : 'S [] -> Local<'R>) (inputs : 'T []) = cloud {
         let! workers = Cloud.GetAvailableWorkers()
         let! results =

@@ -5,8 +5,8 @@
 #time "on"
 
 open MBrace.Core
-open MBrace.Workflows
-open MBrace.Azure.Client
+open MBrace.Library
+open MBrace.Azure
 
 open Nessos.Streams
 
@@ -14,14 +14,10 @@ open DigitRecognizer
 open DigitRecognizer.Knn
 
 // First connect to the cluster
-let cluster = Runtime.GetHandle(config)
-cluster.AttachClientLogger(new MBrace.Azure.ConsoleLogger())
+let cluster = MBraceCluster.GetHandle(config, logger = new ConsoleLogger(), logLevel = LogLevel.Debug)
 
 // initialize a local standalone cluster
-// let cluster = Runtime.InitLocal(config, workerCount = 2)
-
-// attach a local worker to cluster
-// cluster.AttachLocalWorker()
+// let cluster = MBraceCluster.InitOnCurrentMachine(config, workerCount = 2)
 
 let trainPath = __SOURCE_DIRECTORY__ + "/../../data/train.csv"
 let testPath = __SOURCE_DIRECTORY__ + "/../../data/test.csv"
@@ -32,11 +28,10 @@ let tests = Image.Parse testPath
 
 // distributed validation workflow
 let validateDistributed (classifier : Classifier) (validation : TrainingImage []) = cloud {
-    let! successful = 
-        validation 
-        |> Balanced.reduceCombine 
-                (fun validation ->  local { return validateLocalMulticore classifier training validation})
-                (fun cs -> local { return Array.sum cs })
+    let! successful =
+        validation
+        |> Balanced.reduceCombine (fun vs -> local { return validateLocalMulticore classifier training vs })
+                                        (fun cs -> local { return Array.sum cs })
 
     return float successful / float validation.Length
 }
@@ -50,10 +45,10 @@ let classifyDistributed (classifier : Classifier) (images : Image []) = cloud {
             (fun cs -> local { return Array.concat cs })
 }
 
-// test: try running a classification job
-let classifyJob = cluster.CreateProcess (cloud { return! classifyDistributed (knn l2 10) tests })
+// test: try running a classification cloud task
+let classifyTask = cluster.CreateCloudTask (cloud { return! classifyDistributed (knn l2 10) tests })
 
-classifyJob.ShowInfo()
-cluster.ShowWorkers()
-cluster.ShowProcesses()
-classifyJob.AwaitResult()
+classifyTask.ShowInfo()
+cluster.ShowWorkerInfo()
+cluster.ShowCloudTaskInfo()
+classifyTask.AwaitResult()

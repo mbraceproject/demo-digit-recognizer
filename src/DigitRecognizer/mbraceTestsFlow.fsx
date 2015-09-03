@@ -6,8 +6,8 @@
 
 open MBrace.Core
 open MBrace.Flow
-open MBrace.Workflows
-open MBrace.Azure.Client
+open MBrace.Library
+open MBrace.Azure
 
 open Nessos.Streams
 
@@ -15,14 +15,10 @@ open DigitRecognizer
 open DigitRecognizer.Knn
 
 // First connect to the cluster
-let cluster = Runtime.GetHandle(config)
-cluster.AttachClientLogger(new MBrace.Azure.ConsoleLogger())
+let cluster = MBraceCluster.GetHandle(config, logger = new ConsoleLogger(), logLevel = LogLevel.Debug)
 
 // initialize a local standalone cluster
-// let cluster = Runtime.InitLocal(config, workerCount = 2)
-
-// attach a local worker to cluster
-// cluster.AttachLocalWorker()
+// let cluster = MBraceCluster.InitOnCurrentMachine(config, workerCount = 2)
 
 let trainPath = __SOURCE_DIRECTORY__ + "/../../data/train.csv"
 let testPath = __SOURCE_DIRECTORY__ + "/../../data/test.csv"
