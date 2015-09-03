@@ -31,23 +31,6 @@ let testPath = __SOURCE_DIRECTORY__ + "/../../data/test.csv"
 let training = TrainingImage.Parse trainPath
 let tests = Image.Parse testPath
 
-//
-//  CloudFlow-based computation:
-//  
-//  This example is feasible w.r.t. performance on account of the way
-//  that the training set is referenced. In this case `training` directly
-//  references the fsi binding created above. Vagabond guarantees that
-//  this will be replicated across the cluster, so the example below
-//  does not incur any large object serialization penalty.
-//  This would be completely different if the functions below accepted
-//  `training` parametrically, i.e. if it was defined as follows:
-//
-//      let classify (training : TrainingImage []) ... =
-//
-//  this would capture the training set in closure, forcing it inside
-//  the payload of every message of the computation.
-//
-
 let classify (classifier : Classifier) (images : Image []) =
     CloudFlow.OfArray images
     |> CloudFlow.map (fun img -> img.Id, classifier training img)

@@ -1,6 +1,6 @@
 source https://nuget.org/api/v2
 
 nuget Streams
-nuget MBrace.Core 0.9.11-alpha
-nuget MBrace.Flow 0.9.11-alpha
-nuget MBrace.Azure.Standalone 0.6.8-alpha
+nuget MBrace.Core prerelease
+nuget MBrace.Flow
+nuget MBrace.Azure 0.10.0-alpha
