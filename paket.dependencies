@@ -3,4 +3,4 @@ source https://nuget.org/api/v2
 nuget Streams
 nuget MBrace.Core prerelease
 nuget MBrace.Flow
-nuget MBrace.Azure 0.10.0-alpha
+nuget MBrace.Azure 0.13.1-beta
